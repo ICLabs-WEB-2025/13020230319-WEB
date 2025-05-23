@@ -1,0 +1,115 @@
+.hero-section {
+    background: linear-gradient(135deg, #007bff, #00c6ff);
+    color: white;
+    padding: 80px 0;
+    text-align: center;
+    border-radius: 15px;
+    margin-bottom: 40px;
+    position: relative;
+    overflow: hidden;
+}
+
+.hero-section::before {
+    content: "";
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(
+        circle,
+        rgba(255, 255, 255, 0.1) 0%,
+        rgba(255, 255, 255, 0) 70%
+    );
+    animation: rotate 15s linear infinite;
+}
+
+.text-shadow {
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.card-hover {
+    border-radius: 15px;
+    transition: transform 0.3s, box-shadow 0.3s;
+    border: 0;
+}
+
+.card-hover:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.2);
+}
+
+.animate__fadeIn {
+    animation: fadeIn 1s ease-in;
+}
+
+.animate__fadeInUp {
+    animation: fadeInUp 1s ease-in;
+}
+
+.animate__pulse {
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+@keyframes rotate {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+@media (max-width: 768px) {
+    .hero-section {
+        padding: 50px 0;
+    }
+    .card-body {
+        padding: 20px;
+    }
+    .navbar-brand {
+        font-size: 1.2rem;
+    }
+    .display-4 {
+        font-size: 2rem;
+    }
+    .lead {
+        font-size: 1rem;
+    }
+    .btn-lg {
+        font-size: 1rem;
+        padding: 8px 16px;
+    }
+}

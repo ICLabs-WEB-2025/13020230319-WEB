@@ -1,0 +1,30 @@
+.min-vh-100 {
+    min-height: 100vh;
+}
+
+.card-hover {
+    border-radius: 15px;
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.card-hover:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.2);
+}
+
+.form-control-lg {
+    font-size: 1.1rem;
+}
+
+@media (max-width: 576px) {
+    .card-body {
+        padding: 20px;
+    }
+    .form-control-lg {
+        font-size: 1rem;
+    }
+    .btn-lg {
+        font-size: 1rem;
+        padding: 8px 16px;
+    }
+}
