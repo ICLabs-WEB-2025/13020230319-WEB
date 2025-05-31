@@ -23,9 +23,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/sim/mark-as-read/{message_id}', [ChatManagementController::class, 'markAsRead'])->name('chat.mark');
 });
 
+// Route Pusher
 Route::post('/sim/send-message', [ChatManagementController::class, 'sendMessage'])->name('chat.send');
 Route::get('/sim/get-messages', [ChatManagementController::class, 'getMessages'])->name('chat.get');
-Route::get('/sim/chat-user', [ChatManagementController::class, 'user'])->name('chat.user');
+Route::get('/sim/chat-user', [ChatManagementController::class, 'user'])->name('chat.user')->middleware('guest'); // Menggunakan 'guest' untuk mencegah akses admin
 
 Route::get('/', [SimController::class, 'welcome'])->name('welcome');
 Route::post('/sim/public-search', [SimController::class, 'publicSearch'])->name('sim.public-search');

@@ -29,26 +29,22 @@ class SimController extends Controller
 
     public function publicSearch(Request $request)
     {
-        Log::info('publicSearch called', ['sim_number' => $request->sim_number, 'birth_date' => $request->birth_date]);
         $request->validate([
-            'sim_number' => 'required|string',
-            'birth_date' => 'required|date',
+            'nomor_sim' => 'required|string',
+            'tanggal_lahir' => 'required|date',
         ]);
 
-        $sim = Sim::where('nomor_sim', $request->sim_number)
-                  ->where('tanggal_lahir', $request->birth_date)
+        $sim = Sim::where('nomor_sim', $request->nomor_sim)
+                  ->where('tanggal_lahir', $request->tanggal_lahir)
                   ->first();
 
-        if (!$sim) {
-            Log::warning('SIM not found', ['sim_number' => $request->sim_number, 'birth_date' => $request->birth_date]);
-            return redirect()->route('welcome')->with('error', 'SIM tidak ditemukan atau data tidak sesuai.');
+        if ($sim) {
+            session(['public_sim' => $sim]);
+            return view('welcome', compact('sim'));
         }
 
-        $request->session()->put('public_sim', $sim);
-        Log::info('SIM found and session updated', ['sim_number' => $sim->nomor_sim]);
-        return redirect()->route('welcome');
+        return redirect()->route('welcome')->with('error', 'Nomor SIM atau tanggal lahir tidak cocok.');
     }
-
     public function dashboard(Request $request)
     {
         $sims = Sim::query();

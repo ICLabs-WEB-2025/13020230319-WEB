@@ -12,22 +12,24 @@ class ChatManagementController extends Controller
 {
     public function index(Request $request)
     {
-        if (!Auth::check()) {
+        if (!Auth::check() || Auth::user()->role !== 'Admin') {
             return redirect()->route('admin.login')->with('error', 'Silakan login sebagai Admin.');
         }
 
         $sims = Sim::all();
-        $currentSim = $request->query('current_sim') ?? $request->session()->get('current_sim');
-        $messages = [];
-        $unreadCounts = [];
-
-        Log::info('Chat index accessed', ['current_sim' => $currentSim, 'auth_id' => Auth::id()]);
+        $currentSim = $request->query('current_sim') ?? session('current_sim');
+        $messages = $currentSim ? Message::where(function ($query) use ($currentSim) {
+            $query->where('sender_id', $currentSim)->where('sender_type', 'user')
+                  ->orWhere(function ($q) use ($currentSim) {
+                      $q->where('sender_type', 'admin')->where('receiver_id', $currentSim);
+                  });
+        })->orderBy('created_at', 'asc')->get() : [];
 
         if ($currentSim) {
-            $request->session()->put('current_sim', $currentSim);
-            Log::info('Current SIM set in session', ['current_sim' => $currentSim]);
+            session(['current_sim' => $currentSim]);
         }
 
+        $unreadCounts = [];
         foreach ($sims as $sim) {
             $unreadCounts[$sim->nomor_sim] = Message::where('sender_id', $sim->nomor_sim)
                                                    ->where('sender_type', 'user')
@@ -36,17 +38,31 @@ class ChatManagementController extends Controller
                                                    ->count();
         }
 
-        if ($currentSim) {
-            $messages = Message::where(function ($query) use ($currentSim) {
-                $query->where('sender_id', $currentSim)->where('sender_type', 'user')
-                      ->orWhere(function ($q) use ($currentSim) {
-                          $q->where('sender_type', 'admin')->where('receiver_id', $currentSim);
-                      });
-            })->orderBy('created_at', 'asc')->get();
-            Log::info('Messages retrieved for admin', ['count' => $messages->count(), 'current_sim' => $currentSim]);
+        return view('chat.index', compact('sims', 'messages', 'unreadCounts', 'currentSim'));
+    }
+
+    public function user(Request $request)
+    {
+        $sim = session('public_sim');
+        if (!$sim || !isset($sim->nomor_sim)) {
+            return redirect()->route('welcome')->with('error', 'Silakan cari SIM terlebih dahulu.');
         }
 
-        return view('chat.index', compact('sims', 'messages', 'unreadCounts', 'currentSim'));
+        $simNumber = $sim->nomor_sim;
+        $messages = Message::where(function ($query) use ($simNumber) {
+            $query->where('sender_id', $simNumber)->where('sender_type', 'user')
+                  ->orWhere(function ($q) use ($simNumber) {
+                      $q->where('sender_type', 'admin')->where('receiver_id', $simNumber);
+                  });
+        })->orderBy('created_at', 'asc')->get();
+
+        // Tandai pesan dari admin sebagai dibaca
+        Message::where('sender_type', 'admin')
+               ->where('receiver_id', $simNumber)
+               ->where('is_read', false)
+               ->update(['is_read' => true]);
+
+        return view('chat.user', compact('sim', 'messages'));
     }
 
     public function sendMessage(Request $request)
@@ -56,111 +72,33 @@ class ChatManagementController extends Controller
             'sim_number' => 'required|string',
         ]);
 
-        $senderId = null;
-        $senderType = null;
-        $receiverId = null;
+        $senderId = Auth::check() ? Auth::id() : session('public_sim')->nomor_sim;
+        $senderType = Auth::check() ? 'admin' : 'user';
+        $receiverId = Auth::check() ? $request->input('sim_number') : 1; // ID admin default
 
-        Log::info('sendMessage called', [
-            'auth_check' => Auth::check(),
-            'sim_number' => $request->input('sim_number'),
-            'session_public_sim' => $request->session()->get('public_sim'),
-            'referer' => $request->header('referer')
-        ]);
-
-        if (Auth::check()) {
-            $senderId = Auth::id();
-            $senderType = 'admin';
-            $receiverId = $request->input('sim_number');
-            if (!Sim::where('nomor_sim', $receiverId)->exists()) {
-                Log::error('Invalid SIM number', ['sim_number' => $receiverId]);
-                return response()->json(['success' => false, 'message' => 'Nomor SIM tidak valid.'], 400);
-            }
-        } else {
-            $sim = $request->session()->get('public_sim');
-            if ($sim && isset($sim->nomor_sim) && $sim->nomor_sim === $request->input('sim_number')) {
-                $senderId = $sim->nomor_sim;
-                $senderType = 'user';
-                $receiverId = 1; // ID Admin default (sesuaikan dengan ID Admin Anda)
-            } else {
-                Log::error('Invalid session for Pemegang SIM', [
-                    'session_public_sim' => $sim,
-                    'sim_number' => $request->input('sim_number')
-                ]);
-                return response()->json(['success' => false, 'message' => 'Sesi tidak valid. Silakan cari SIM terlebih dahulu.'], 401);
-            }
+        if (Auth::check() && !Sim::where('nomor_sim', $receiverId)->exists()) {
+            return response()->json(['success' => false, 'message' => 'Nomor SIM tidak valid.'], 400);
         }
 
-        $message = new Message();
-        $message->message = $request->input('message');
-        $message->sender_id = $senderId;
-        $message->sender_type = $senderType;
-        $message->receiver_id = $receiverId;
-        $message->is_read = false;
-        $message->created_at = now();
-        $message->save();
-
-        Log::info('Message saved', [
-            'sender_id' => $senderId,
+        $message = Message::create([
             'sender_type' => $senderType,
+            'sender_id' => $senderId,
             'receiver_id' => $receiverId,
-            'message_id' => $message->id
+            'message' => $request->input('message'),
+            'is_read' => false,
         ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => [
-                'message' => $message->message,
-                'sender_type' => $message->sender_type,
-                'created_at' => $message->created_at->format('Y-m-d H:i:s')
-            ]
-        ]);
+        // Broadcast pesan menggunakan Pusher
+        broadcast(new \App\Events\MessageSent($message))->toOthers();
+
+        return response()->json(['success' => true, 'message' => $message]);
     }
 
     public function getMessages(Request $request)
     {
         $simNumber = $request->query('sim_number');
-        Log::info('getMessages called', ['sim_number' => $simNumber]);
-
         if (!$simNumber) {
-            Log::error('No sim_number provided');
             return response()->json(['success' => false, 'message' => 'Nomor SIM tidak diberikan.'], 400);
-        }
-
-        $messages = Message::where(function ($query) use ($simNumber) {
-            $query->where('sender_id', $simNumber)->where('sender_type', 'user')
-                  ->orWhere(function ($q) use ($simNumber) {
-                      $q->where('sender_type', 'admin')->where('receiver_id', $simNumber);
-                  });
-        })->orderBy('created_at', 'asc')->get()->map(function ($message) {
-            $message->created_at = $message->created_at->format('Y-m-d H:i:s');
-            return $message;
-        });
-
-        // Tandai pesan sebagai dibaca jika dari admin ke user
-        if (Auth::check()) {
-            Message::where('sender_type', 'user')
-                   ->where('receiver_id', Auth::id())
-                   ->where('sender_id', $simNumber)
-                   ->where('is_read', false)
-                   ->update(['is_read' => true]);
-        }
-
-        Log::info('Messages retrieved', ['count' => $messages->count(), 'sim_number' => $simNumber]);
-        return response()->json($messages);
-    }
-
-    public function user(Request $request)
-    {
-        $sim = $request->session()->get('public_sim');
-        if (!$sim || !isset($sim->nomor_sim)) {
-            return redirect()->route('welcome')->with('error', 'Silakan cari SIM terlebih dahulu untuk mengakses chat.');
-        }
-
-        $simNumber = $sim->nomor_sim;
-        $simData = Sim::where('nomor_sim', $simNumber)->first();
-        if (!$simData) {
-            $request->session()->forget('public_sim');
-            return redirect()->route('welcome')->with('error', 'Nomor SIM tidak ditemukan. Silakan cari SIM terlebih dahulu.');
         }
 
         $messages = Message::where(function ($query) use ($simNumber) {
@@ -170,20 +108,14 @@ class ChatManagementController extends Controller
                   });
         })->orderBy('created_at', 'asc')->get();
 
-        Message::where('sender_type', 'admin')
-               ->where('receiver_id', $simNumber)
-               ->where('is_read', false)
-               ->update(['is_read' => true]);
+        if (Auth::check()) {
+            Message::where('sender_type', 'user')
+                   ->where('receiver_id', Auth::id())
+                   ->where('sender_id', $simNumber)
+                   ->where('is_read', false)
+                   ->update(['is_read' => true]);
+        }
 
-        Log::info('Chat user accessed', ['sim_number' => $simNumber]);
-        return view('chat.user', compact('sim', 'messages'));
-    }
-
-    public function markAsRead($message_id)
-    {
-        $message = Message::findOrFail($message_id);
-        $message->update(['is_read' => true]);
-        Log::info('Message marked as read', ['message_id' => $message_id]);
-        return redirect()->back();
+        return response()->json($messages);
     }
 }

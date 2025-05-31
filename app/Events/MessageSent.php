@@ -24,19 +24,11 @@ class MessageSent implements ShouldBroadcast
 
     public function broadcastOn()
     {
-        return new PrivateChannel('chat.' . $this->message->sender_id);
+        return new PrivateChannel('chat.' . $this->message->receiver_id);
     }
 
     public function broadcastWith()
     {
-        return [
-            'id' => $this->message->id,
-            'sender_type' => $this->message->sender_type,
-            'sender_id' => $this->message->sender_id,
-            'receiver_id' => $this->message->receiver_id,
-            'message' => $this->message->message,
-            'created_at' => $this->message->created_at->format('H:i:s d/m/Y'),
-            'is_read' => $this->message->is_read,
-        ];
+        return ['message' => $this->message];
     }
 }
